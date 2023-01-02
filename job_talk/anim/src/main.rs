@@ -1,17 +1,11 @@
 use plotters::prelude::*;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::rc::Rc;
 
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
-}
-
-// use print_type_of on Chart to get this type
-type Chart<'a> = plotters::chart::ChartContext<
-    'a,
-    BitMapBackend<'a>,
-    Cartesian2d<plotters::coord::types::RangedCoordf64, plotters::coord::types::RangedCoordf64>,
->;
+const PKT_HEIGHT: f64 = 1.0;
+const DATA_PKT_WIDTH: f64 = 0.5;
+const ACK_PKT_WIDTH: f64 = 0.2;
 
 #[derive(Clone, Copy, Debug)]
 struct Coord(f64, f64);
@@ -46,7 +40,6 @@ struct Packet {
 
 impl Packet {
     fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
-        println!("{self:?}");
         vec![Rectangle::new(
             [
                 (self.coord.0, self.coord.1 - 0.5),
@@ -56,17 +49,6 @@ impl Packet {
         )
         .into_dyn()]
     }
-    // fn draw(&self, chart: &mut Chart) -> Result<(), Box<dyn std::error::Error>> {
-    //     let rect: Vec<(f64, f64)> = vec![
-    //         self.coord.add(Coord(0.0, 0.5)).into(),
-    //         self.coord.add(Coord(0.0, -0.5)).into(),
-    //         self.coord.add(Coord(self.size, -0.5)).into(),
-    //         self.coord.add(Coord(self.size, 0.5)).into(),
-    //     ];
-    //     //chart.draw_series(std::iter::once(PathElement::new(rect, &RED)))?;
-    //     chart.draw_series(std::iter::once(Polygon::new(rect, &RED.mix(0.2))))?;
-    //     Ok(())
-    // }
 }
 
 trait Element {
@@ -78,21 +60,20 @@ trait Element {
     fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>>;
 }
 
+/// Transports packets from the coordinate at which they were enqueued to the
+/// coordinate returned by `next.get_enqueue_coord`
 struct Transport<N: Element> {
-    start: Coord,
-    end: Coord,
     /// Time taken to traverse the area in ticks
     delay: u64,
-    /// All the packets in flight and the number of ticks since they were enqueued
-    pkts: Vec<(Packet, u64)>,
+    /// All the packets in flight. Stores (pkt, number of ticks since they were
+    /// enqueued, coordinate from which they started, coordinate to which they are headed)
+    pkts: Vec<(Packet, u64, Coord, Coord)>,
     next: Rc<RefCell<N>>,
 }
 
 impl<N: Element> Transport<N> {
-    fn new(start: Coord, end: Coord, delay: u64, next: Rc<RefCell<N>>) -> Self {
+    fn new(delay: u64, next: Rc<RefCell<N>>) -> Self {
         Self {
-            start,
-            end,
             delay,
             next,
             pkts: Vec::new(),
@@ -102,13 +83,18 @@ impl<N: Element> Transport<N> {
 
 impl<N: Element> Element for Transport<N> {
     fn get_enqueue_coord(&self) -> Coord {
-        self.start
+        // Transport is not supposed to supply this info
+        unreachable!()
     }
 
     fn enqueue(&mut self, pkt: &Packet) {
         let mut pkt = pkt.clone();
-        pkt.coord = self.start;
-        self.pkts.push((pkt, 0));
+        self.pkts.push((
+            pkt,
+            0,
+            pkt.coord,
+            self.next.borrow_mut().get_enqueue_coord(),
+        ));
     }
 
     fn get_pkts(&self) -> Vec<Packet> {
@@ -116,10 +102,11 @@ impl<N: Element> Element for Transport<N> {
     }
 
     fn tick(&mut self) {
-        let speed = self.end.sub(self.start).div(self.delay as f64);
-
         let mut to_remove = Vec::new();
         for i in 0..self.pkts.len() {
+            let (_, _, start, end) = self.pkts[i];
+            let speed = end.sub(start).div(self.delay as f64);
+
             self.pkts[i].0.coord = self.pkts[i].0.coord.add(speed);
             self.pkts[i].1 += 1;
             if self.pkts[i].1 >= self.delay {
@@ -133,13 +120,6 @@ impl<N: Element> Element for Transport<N> {
         }
     }
 
-    // fn draw(&self, chart: &mut Chart) -> Result<(), Box<dyn std::error::Error>> {
-    //     for pkt in &self.pkts {
-    //         pkt.0.draw(chart)?;
-    //     }
-    //     Ok(())
-    // }
-
     fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
         let mut res = Vec::new();
         for pkt in &self.pkts {
@@ -150,11 +130,13 @@ impl<N: Element> Element for Transport<N> {
 }
 
 /// Does nothing. Simply sinks packets
-struct Sink {}
+struct Sink {
+    pub coord: Coord,
+}
 
 impl Element for Sink {
     fn get_enqueue_coord(&self) -> Coord {
-        Coord(0., 0.)
+        self.coord
     }
     fn enqueue(&mut self, _: &Packet) {}
     fn get_pkts(&self) -> Vec<Packet> {
@@ -163,36 +145,147 @@ impl Element for Sink {
     fn tick(&mut self) {}
     fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
         Vec::new()
-        // EmptyElement::at((0., 0.)).into_dyn()
+    }
+}
+
+struct Bottleneck<N: Element> {
+    /// Coords of the left center of the buffer
+    coord: Coord,
+    /// Number of packets in buffer. Also determines visual size
+    bufsize: u64,
+    /// Number of ticks between successive packet transmissions
+    intersend_time: u64,
+    pkts: VecDeque<Packet>,
+    /// To determine when to send next packet
+    time_since_last_deque: u64,
+    /// Used to drop packets
+    dropper: Transport<Sink>,
+    next: Rc<RefCell<N>>,
+}
+
+impl<N: Element> Bottleneck<N> {
+    fn new(coord: Coord, bufsize: u64, intersend_time: u64, next: Rc<RefCell<N>>) -> Self {
+        let dropper = Transport::new(
+            16,
+            Rc::new(RefCell::new(Sink {
+                coord: coord.sub(Coord(0., 5.)),
+            })),
+        );
+
+        Self {
+            coord,
+            bufsize,
+            intersend_time,
+            pkts: VecDeque::new(),
+            time_since_last_deque: 0,
+            dropper,
+            next,
+        }
+    }
+}
+
+impl<N: Element> Element for Bottleneck<N> {
+    fn get_enqueue_coord(&self) -> Coord {
+        assert!(self.pkts.len() <= self.bufsize as usize);
+        self.coord.sub(Coord(DATA_PKT_WIDTH, 0.))
+    }
+
+    fn enqueue(&mut self, pkt: &Packet) {
+        if self.pkts.len() < self.bufsize as usize {
+            let mut pkt = pkt.clone();
+            let bufwidth = self.pkts.iter().map(|p| p.size).sum();
+            pkt.coord = self
+                .coord
+                .sub(Coord(bufwidth, 0.))
+                .add(Coord(self.bufsize as f64 * DATA_PKT_WIDTH, 0.))
+                .sub(Coord(pkt.size, 0.));
+            self.pkts.push_back(pkt);
+            println!("{:?}", self.pkts);
+        } else {
+            self.dropper.enqueue(pkt);
+        }
+    }
+
+    fn get_pkts(&self) -> Vec<Packet> {
+        self.pkts.iter().map(|p| *p).collect()
+    }
+
+    fn tick(&mut self) {
+        self.time_since_last_deque += 1;
+        if self.time_since_last_deque >= self.intersend_time && self.pkts.len() > 0 {
+            self.time_since_last_deque = 0;
+            let popped = self.pkts.pop_front().unwrap();
+            self.next.borrow_mut().enqueue(&popped);
+            for mut pkt in &mut self.pkts {
+                pkt.coord.0 += popped.size;
+            }
+        }
+        self.dropper.tick()
+    }
+
+    fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
+        let size = self.bufsize as f64 * DATA_PKT_WIDTH;
+        let buffer = PathElement::new(
+            vec![
+                (self.coord.0, self.coord.1 - PKT_HEIGHT * 0.55),
+                (self.coord.0 + size, self.coord.1 - PKT_HEIGHT * 0.55),
+                (self.coord.0 + size, self.coord.1 + PKT_HEIGHT * 0.55),
+                (self.coord.0, self.coord.1 + PKT_HEIGHT * 0.55),
+            ],
+            BLACK,
+        );
+        let mut res = vec![buffer.into_dyn()];
+        for pkt in &self.pkts {
+            res.extend(pkt.draw());
+        }
+        res.extend(self.dropper.draw());
+        res
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = BitMapBackend::gif("ideal.gif", (800, 600), 33)?.into_drawing_area();
 
-    let sink = Rc::new(RefCell::new(Sink {}));
-    let delay = Rc::new(RefCell::new(Transport::new(
-        Coord(-9., 0.),
-        Coord(9., 0.),
-        64,
-        sink,
+    let sink = Rc::new(RefCell::new(Sink {
+        coord: Coord(9., 0.),
+    }));
+    let departure = Rc::new(RefCell::new(Transport::new(32, sink.clone())));
+    let bottleneck = Rc::new(RefCell::new(Bottleneck::new(
+        Coord(0., 0.),
+        10,
+        32,
+        departure.clone(),
     )));
+    let arrival = Rc::new(RefCell::new(Transport::new(64, bottleneck.clone())));
 
-    for tick in 0..64 {
+    for tick in 0..640 {
         root.fill(&WHITE)?;
         let chart = ChartBuilder::on(&root).build_cartesian_2d(-10.0..10.0, -10.0..10.0)?;
-        // print_type_of(&chart);
 
-        let mut delay = delay.borrow_mut();
+        let mut arrival = arrival.borrow_mut();
+
         if tick % 16 == 0 {
-            delay.enqueue(&Packet {
-                size: 1.,
-                coord: Coord(0., 0.),
+            arrival.enqueue(&Packet {
+                size: DATA_PKT_WIDTH,
+                coord: Coord(-10., 0.),
             });
         }
-        delay.tick();
-        for elem in delay.draw() {
-            chart.plotting_area().draw(&elem)?;
+
+        arrival.tick();
+        for e in arrival.draw() {
+            chart.plotting_area().draw(&e)?;
+        }
+
+        let mut bottleneck = bottleneck.borrow_mut();
+        bottleneck.tick();
+        for e in bottleneck.draw() {
+            chart.plotting_area().draw(&e)?;
+        }
+
+        let mut departure = departure.borrow_mut();
+        departure.tick();
+        for e in departure.draw() {
+            chart.plotting_area().draw(&e)?;
         }
 
         root.present()?;
