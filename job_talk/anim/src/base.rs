@@ -1,8 +1,8 @@
 use plotters::prelude::*;
 
-pub const PKT_HEIGHT: f64 = 1.0;
-pub const DATA_PKT_WIDTH: f64 = 0.5;
-pub const ACK_PKT_WIDTH: f64 = 0.2;
+pub const PKT_HEIGHT: f64 = 1.5;
+pub const DATA_PKT_WIDTH: f64 = 0.25;
+pub const ACK_PKT_WIDTH: f64 = 0.1;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Coord(pub f64, pub f64);
@@ -41,14 +41,24 @@ pub struct Packet {
 
 impl Packet {
     pub fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
-        vec![Rectangle::new(
-            [
-                (self.coord.0, self.coord.1 - 0.5),
-                (self.coord.0 + self.size, self.coord.1 + 0.5),
-            ],
-            self.style,
-        )
-        .into_dyn()]
+        vec![
+            Rectangle::new(
+                [
+                    (self.coord.0, self.coord.1 - PKT_HEIGHT / 2.),
+                    (self.coord.0 + self.size, self.coord.1 + PKT_HEIGHT / 2.),
+                ],
+                self.style,
+            )
+            .into_dyn(),
+            Rectangle::new(
+                [
+                    (self.coord.0, self.coord.1 - PKT_HEIGHT / 2.),
+                    (self.coord.0 + self.size, self.coord.1 + PKT_HEIGHT / 2.),
+                ],
+                ShapeStyle::from(BLACK).stroke_width(2),
+            )
+            .into_dyn(),
+        ]
     }
 }
 

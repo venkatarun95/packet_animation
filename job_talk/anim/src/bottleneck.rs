@@ -21,6 +21,12 @@ pub struct Bottleneck<N: Element> {
     next: Rc<RefCell<N>>,
     /// +1 means left to right, -1 means right to left
     dir: f64,
+    /// Amount all packets have moved to animate dequeuing
+    amt_moved: f64,
+    /// Little buffer of packets so we can return in `draw`; an ugly hack that
+    /// is the result of poor choices with rust lifetimes. `enqueue` and `tick`
+    /// copy pkt over to this. `draw` messes with this and makes it dirty.
+    pkts_tmp_buffer: Vec<Packet>,
 }
 
 impl<N: Element> Bottleneck<N> {
@@ -48,6 +54,8 @@ impl<N: Element> Bottleneck<N> {
             dropper,
             next,
             dir: if dir { 1.0 } else { -1.0 },
+            amt_moved: 0.,
+            pkts_tmp_buffer: Vec::new(),
         }
     }
 }
@@ -71,6 +79,17 @@ impl<N: Element> Element for Bottleneck<N> {
         } else {
             self.dropper.enqueue(pkt);
         }
+
+        // Ugly trick for lifetimes
+        self.pkts_tmp_buffer = self
+            .pkts
+            .iter()
+            .map(|x| {
+                let mut y = x.clone();
+                y.coord.0 += self.amt_moved;
+                y
+            })
+            .collect();
     }
 
     fn get_pkts(&self) -> Vec<Packet> {
@@ -86,8 +105,27 @@ impl<N: Element> Element for Bottleneck<N> {
             for mut pkt in &mut self.pkts {
                 pkt.coord.0 += popped.size * self.dir;
             }
+            self.amt_moved = 0.;
         }
-        self.dropper.tick()
+        // Move the packets a little to indicate progress
+        if let Some(_front) = self.pkts.front() {
+            self.amt_moved = 0.;
+            // self.amt_moved = front.size * self.time_since_last_deque as f64 / self.intersend_time as f64;
+        } else {
+            self.amt_moved = 0.;
+        }
+        self.dropper.tick();
+
+        // Ugly trick for lifetimes
+        self.pkts_tmp_buffer = self
+            .pkts
+            .iter()
+            .map(|x| {
+                let mut y = x.clone();
+                y.coord.0 += self.amt_moved;
+                y
+            })
+            .collect();
     }
 
     fn draw<DB: DrawingBackend>(&self) -> Vec<DynElement<DB, (f64, f64)>> {
@@ -108,7 +146,8 @@ impl<N: Element> Element for Bottleneck<N> {
             BLACK,
         );
         let mut res = vec![buffer.into_dyn()];
-        for pkt in &self.pkts {
+        // `enqueue` and `tick` nicely modified this for us
+        for pkt in &self.pkts_tmp_buffer {
             res.extend(pkt.draw());
         }
         res.extend(self.dropper.draw());
