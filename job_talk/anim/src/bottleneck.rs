@@ -18,7 +18,9 @@ pub struct Bottleneck<N: Element> {
     time_since_last_deque: u64,
     /// Used to drop packets
     dropper: Transport<Sink>,
-    next: Rc<RefCell<N>>,
+    /// There can be multiple nexts. Packets go to the next as given by packet
+    /// address
+    next: Vec<Rc<RefCell<N>>>,
     /// +1 means left to right, -1 means right to left
     dir: f64,
     /// Amount all packets have moved to animate dequeuing
@@ -30,12 +32,14 @@ pub struct Bottleneck<N: Element> {
 }
 
 impl<N: Element> Bottleneck<N> {
-    /// dir = true means left to right and false means right to left
+    /// dir = true means left to right and false means right to left. Note,
+    /// `next` can be empty when constructing and `next` can be filled
+    /// afterward, before calling any other functions
     pub fn new(
         coord: Coord,
         bufsize: u64,
         intersend_time: u64,
-        next: Rc<RefCell<N>>,
+        next: Vec<Rc<RefCell<N>>>,
         dir: bool,
     ) -> Self {
         let dropper = Transport::new(
@@ -57,6 +61,10 @@ impl<N: Element> Bottleneck<N> {
             amt_moved: 0.,
             pkts_tmp_buffer: Vec::new(),
         }
+    }
+
+    pub fn set_next(&mut self, next: Vec<Rc<RefCell<N>>>) {
+        self.next = next;
     }
 }
 
@@ -101,7 +109,9 @@ impl<N: Element> Element for Bottleneck<N> {
         if self.time_since_last_deque >= self.intersend_time && self.pkts.len() > 0 {
             self.time_since_last_deque = 0;
             let popped = self.pkts.pop_front().unwrap();
-            self.next.borrow_mut().enqueue(&popped);
+            self.next[popped.addr as usize]
+                .borrow_mut()
+                .enqueue(&popped);
             for mut pkt in &mut self.pkts {
                 pkt.coord.0 += popped.size * self.dir;
             }
