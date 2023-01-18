@@ -11,8 +11,11 @@ pub struct Bottleneck<N: Element> {
     coord: Coord,
     /// Number of packets in buffer. Also determines visual size
     bufsize: u64,
-    /// Number of ticks between successive packet transmissions
-    intersend_time: u64,
+    /// Number of ticks between successive packet transmissions. Note: this is
+    /// different from mahimahi traces
+    intersend_time: Vec<u64>,
+    /// Index into intersend time
+    intersend_time_index: usize,
     pkts: VecDeque<Packet>,
     /// To determine when to send next packet
     time_since_last_deque: u64,
@@ -38,7 +41,7 @@ impl<N: Element> Bottleneck<N> {
     pub fn new(
         coord: Coord,
         bufsize: u64,
-        intersend_time: u64,
+        intersend_time: Vec<u64>,
         next: Vec<Rc<RefCell<N>>>,
         dir: bool,
     ) -> Self {
@@ -53,6 +56,7 @@ impl<N: Element> Bottleneck<N> {
             coord,
             bufsize,
             intersend_time,
+            intersend_time_index: 0,
             pkts: VecDeque::new(),
             time_since_last_deque: 0,
             dropper,
@@ -106,7 +110,9 @@ impl<N: Element> Element for Bottleneck<N> {
 
     fn tick(&mut self) {
         self.time_since_last_deque += 1;
-        if self.time_since_last_deque >= self.intersend_time && self.pkts.len() > 0 {
+        if self.time_since_last_deque >= self.intersend_time[self.intersend_time_index]
+            && self.pkts.len() > 0
+        {
             self.time_since_last_deque = 0;
             let popped = self.pkts.pop_front().unwrap();
             self.next[popped.addr as usize]
@@ -116,6 +122,7 @@ impl<N: Element> Element for Bottleneck<N> {
                 pkt.coord.0 += popped.size * self.dir;
             }
             self.amt_moved = 0.;
+            self.intersend_time_index = (self.intersend_time_index + 1) % self.intersend_time.len();
         }
         // Move the packets a little to indicate progress
         if let Some(_front) = self.pkts.front() {

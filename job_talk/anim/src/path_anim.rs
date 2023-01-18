@@ -33,7 +33,7 @@ pub fn path_anim(config: &PathAnimConfig) -> Result<(), Box<dyn Error>> {
     let ret_bottleneck = Rc::new(RefCell::new(Bottleneck::new(
         Coord(DATA_PKT_WIDTH * config.bufsize as f64, -PKT_HEIGHT * 2.),
         config.bufsize,
-        config.bottleneck_intersend,
+        vec![config.bottleneck_intersend],
         vec![returnpath2.clone()],
         false,
     )));
@@ -47,7 +47,7 @@ pub fn path_anim(config: &PathAnimConfig) -> Result<(), Box<dyn Error>> {
     let bottleneck = Rc::new(RefCell::new(Bottleneck::new(
         Coord(0., 0.),
         config.bufsize,
-        config.bottleneck_intersend,
+        vec![config.bottleneck_intersend],
         vec![departure.clone()],
         true,
     )));

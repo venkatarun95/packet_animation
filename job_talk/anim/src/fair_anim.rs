@@ -34,14 +34,14 @@ pub fn fair_anim(config: &FairAnimConfig) -> Result<(), Box<dyn Error>> {
     let ret_bottleneck = Rc::new(RefCell::new(Bottleneck::new(
         Coord(DATA_PKT_WIDTH * config.bufsize as f64, -PKT_HEIGHT * 2.),
         config.bufsize,
-        config.bottleneck_intersend,
+        vec![config.bottleneck_intersend],
         vec![],
         false,
     )));
     let bottleneck = Rc::new(RefCell::new(Bottleneck::new(
         Coord(0., 0.),
         config.bufsize,
-        config.bottleneck_intersend,
+        vec![config.bottleneck_intersend],
         vec![],
         true,
     )));
