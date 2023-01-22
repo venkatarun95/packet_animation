@@ -1,5 +1,5 @@
 //! Animate just a single element
-use crate::base::{Coord, Element, Packet, DATA_PKT_WIDTH, PKT_HEIGHT};
+use crate::base::{Coord, Element, Packet, DATA_PKT_WIDTH};
 use crate::bottleneck::Bottleneck;
 use crate::simple_elems::Sink;
 use crate::transport::Transport;

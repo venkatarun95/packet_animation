@@ -28,6 +28,8 @@ pub struct Bottleneck<N: Element> {
     dir: f64,
     /// Amount all packets have moved to animate dequeuing
     amt_moved: f64,
+    /// Should we draw the buffers?
+    draw_buffer: bool,
     /// Little buffer of packets so we can return in `draw`; an ugly hack that
     /// is the result of poor choices with rust lifetimes. `enqueue` and `tick`
     /// copy pkt over to this. `draw` messes with this and makes it dirty.
@@ -63,12 +65,17 @@ impl<N: Element> Bottleneck<N> {
             next,
             dir: if dir { 1.0 } else { -1.0 },
             amt_moved: 0.,
+            draw_buffer: true,
             pkts_tmp_buffer: Vec::new(),
         }
     }
 
     pub fn set_next(&mut self, next: Vec<Rc<RefCell<N>>>) {
         self.next = next;
+    }
+
+    pub fn draw_buffer(&mut self, draw_buffer: bool) {
+        self.draw_buffer = draw_buffer;
     }
 }
 
@@ -162,7 +169,12 @@ impl<N: Element> Element for Bottleneck<N> {
             ],
             BLACK,
         );
-        let mut res = vec![buffer.into_dyn()];
+        let mut res = if self.draw_buffer {
+            vec![buffer.into_dyn()]
+        } else {
+            Vec::new()
+        };
+
         // `enqueue` and `tick` nicely modified this for us
         for pkt in &self.pkts_tmp_buffer {
             res.extend(pkt.draw());

@@ -4,14 +4,45 @@ mod elem_anim;
 mod fair_anim;
 mod path_anim;
 mod simple_elems;
+mod starvation_anim;
 mod transport;
+mod two_bottlenecks_anim;
 
 use crate::elem_anim::{elem_anim, ElemAnimConfig};
 use crate::fair_anim::{fair_anim, FairAnimConfig};
 use crate::path_anim::{path_anim, PathAnimConfig};
+use crate::starvation_anim::starvation_anim;
+use crate::two_bottlenecks_anim::{two_bottlenecks_anim, TwoBottlenecksAnimConfig};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    starvation_anim()?;
+
+    let two_bottlenecks_config = TwoBottlenecksAnimConfig {
+        filename: String::from("two-bottlenecks-ideal.gif"),
+        bufsize1: 8,
+        bottleneck1_intersend: vec![10],
+        bufsize2: 4,
+        bottleneck2_intersend: vec![10],
+        sender_intersend: 10,
+        num_extra_packets: 7,
+        num_ticks: 640,
+    };
+    two_bottlenecks_anim(&two_bottlenecks_config)?;
+
+    let adversary_config = TwoBottlenecksAnimConfig {
+        filename: String::from("two-bottlenecks-adversary.gif"),
+        bufsize1: 8,
+        bottleneck1_intersend: vec![10],
+        bufsize2: 4,
+        //bottleneck2_intersend: vec![5, 0, 0, 20, 10, 0, 30, 15],
+        bottleneck2_intersend: vec![0, 0, 30],
+        sender_intersend: 10,
+        num_extra_packets: 7,
+        num_ticks: 640,
+    };
+    two_bottlenecks_anim(&adversary_config)?;
+
     let elem_config = ElemAnimConfig {
         filename: String::from("elem-ideal.gif"),
         bufsize: 8,
@@ -49,8 +80,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         num_ticks: 640,
     };
     elem_anim(&elem_config)?;
-
-    return Ok(());
 
     let fair_config = FairAnimConfig {
         filename: String::from("fair.gif"),
