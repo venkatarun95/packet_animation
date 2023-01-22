@@ -24,6 +24,8 @@ pub struct TwoBottlenecksAnimConfig {
     pub num_extra_packets: u64,
     /// Number of ticks to animate
     pub num_ticks: u64,
+    /// Should we draw the buffer for the two bottlenecks?
+    pub draw_buffer: (bool, bool),
 }
 
 pub fn two_bottlenecks_anim(config: &TwoBottlenecksAnimConfig) -> Result<(), Box<dyn Error>> {
@@ -57,9 +59,6 @@ pub fn two_bottlenecks_anim(config: &TwoBottlenecksAnimConfig) -> Result<(), Box
         vec![departure.clone()],
         true,
     )));
-    {
-        bottleneck2.borrow_mut().draw_buffer(false);
-    }
     let between_2_bottlenecks = Rc::new(RefCell::new(Transport::new(16, bottleneck2.clone())));
     let bottleneck = Rc::new(RefCell::new(Bottleneck::new(
         Coord(-3.33, 0.),
@@ -69,6 +68,11 @@ pub fn two_bottlenecks_anim(config: &TwoBottlenecksAnimConfig) -> Result<(), Box
         true,
     )));
     let arrival = Rc::new(RefCell::new(Transport::new(32, bottleneck.clone())));
+
+    {
+        bottleneck.borrow_mut().draw_buffer(config.draw_buffer.0);
+        bottleneck2.borrow_mut().draw_buffer(config.draw_buffer.1);
+    }
 
     let mut num_packets = 0;
     for tick in 0..config.num_ticks {

@@ -15,10 +15,10 @@ pub struct FairAnimConfig {
     pub bufsize: u64,
     /// Bottleneck link rate
     pub bottleneck_intersend: u64,
-    /// Sending rate
-    pub sender_intersend: u64,
-    /// Number of extra packets to send beyond sender_intersend
-    pub num_extra_packets: u64,
+    /// Sending rate for the two senders
+    pub sender_intersend: (u64, u64),
+    /// Extra packets from sender 1
+    pub extra_packets: u64,
     /// Number of ticks to animate
     pub num_ticks: u64,
 }
@@ -87,9 +87,9 @@ pub fn fair_anim(config: &FairAnimConfig) -> Result<(), Box<dyn Error>> {
         // Produce packets
         {
             let mut arrival_a = arrival_a.borrow_mut();
-            if tick % config.sender_intersend == 0
-                || (tick % (config.sender_intersend / 2) == 0
-                    && num_packets < config.num_extra_packets)
+            if tick % config.sender_intersend.0 == 0
+                || (num_packets < config.extra_packets
+                    && tick % config.sender_intersend.0 == config.sender_intersend.0 / 2)
             {
                 arrival_a.enqueue(&Packet {
                     size: DATA_PKT_WIDTH,
@@ -107,10 +107,7 @@ pub fn fair_anim(config: &FairAnimConfig) -> Result<(), Box<dyn Error>> {
 
         {
             let mut arrival_b = arrival_b.borrow_mut();
-            if (tick + config.sender_intersend / 2) % config.sender_intersend == 0
-                || ((tick + config.sender_intersend / 2) % (config.sender_intersend / 2) == 0
-                    && num_packets < config.num_extra_packets)
-            {
+            if tick % config.sender_intersend.1 == config.sender_intersend.1 / 2 {
                 arrival_b.enqueue(&Packet {
                     size: DATA_PKT_WIDTH,
                     coord: Coord(-10., -vsep),

@@ -19,6 +19,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     starvation_anim()?;
 
     let two_bottlenecks_config = TwoBottlenecksAnimConfig {
+        filename: String::from("two-bottlenecks-copa.gif"),
+        bufsize1: 8,
+        bottleneck1_intersend: vec![73, 1, 1, 1, 1, 1, 1, 1],
+        bufsize2: 8,
+        bottleneck2_intersend: vec![10],
+        sender_intersend: 15,
+        num_extra_packets: 0,
+        num_ticks: 640,
+        draw_buffer: (true, true),
+    };
+    two_bottlenecks_anim(&two_bottlenecks_config)?;
+
+    let two_bottlenecks_config = TwoBottlenecksAnimConfig {
         filename: String::from("two-bottlenecks-ideal.gif"),
         bufsize1: 8,
         bottleneck1_intersend: vec![10],
@@ -27,6 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         sender_intersend: 10,
         num_extra_packets: 7,
         num_ticks: 640,
+        draw_buffer: (true, false),
     };
     two_bottlenecks_anim(&two_bottlenecks_config)?;
 
@@ -40,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         sender_intersend: 10,
         num_extra_packets: 7,
         num_ticks: 640,
+        draw_buffer: (true, false),
     };
     two_bottlenecks_anim(&adversary_config)?;
 
@@ -85,8 +100,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         filename: String::from("fair.gif"),
         bufsize: 8,
         bottleneck_intersend: 5,
-        sender_intersend: 10,
-        num_extra_packets: 8,
+        sender_intersend: (10, 10),
+        extra_packets: 8,
+        num_ticks: 640,
+    };
+    fair_anim(&fair_config)?;
+
+    let fair_config = FairAnimConfig {
+        filename: String::from("unfair.gif"),
+        bufsize: 8,
+        bottleneck_intersend: 10,
+        sender_intersend: (11, 110),
+        extra_packets: 8,
         num_ticks: 640,
     };
     fair_anim(&fair_config)?;
