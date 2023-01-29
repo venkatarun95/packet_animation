@@ -23,7 +23,7 @@ fn cca_behavior(link_rate: f64) -> Vec<(f64, f64)> {
 }
 
 pub fn starvation_anim() -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::gif("starvation-knob.gif", (1200, 800), 33)?.into_drawing_area();
+    let root = BitMapBackend::gif("starvation-knob.gif", (1200, 800), 16)?.into_drawing_area();
     let (graph, knob) = root.split_vertically(600);
     const NUM_FRAMES: usize = 33 * 9;
 
@@ -51,8 +51,7 @@ pub fn starvation_anim() -> Result<(), Box<dyn Error>> {
             .draw()?;
 
         // let link_rate = 0.1 + 0.9 * frame as f64 / NUM_FRAMES as f64;
-        let link_rate =
-            1. / 9. + ((6.28 * 2. * frame as f64 / NUM_FRAMES as f64).sin() + 1.) * 0.42;
+        let link_rate = 1. / 9. + ((6.28 * frame as f64 / NUM_FRAMES as f64).sin() + 1.) * 0.42;
 
         chart.draw_series(LineSeries::new(cca_behavior(link_rate), highlight))?;
 

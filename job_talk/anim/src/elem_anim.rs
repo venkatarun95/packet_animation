@@ -21,7 +21,7 @@ pub struct ElemAnimConfig {
 }
 
 pub fn elem_anim(config: &ElemAnimConfig) -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::gif(&config.filename, (300, 100), 33)?.into_drawing_area();
+    let root = BitMapBackend::gif(&config.filename, (300, 100), 16)?.into_drawing_area();
 
     let sink = Rc::new(RefCell::new(Sink {
         coord: Coord(5., 0.),

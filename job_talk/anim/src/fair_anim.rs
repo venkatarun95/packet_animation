@@ -24,7 +24,7 @@ pub struct FairAnimConfig {
 }
 
 pub fn fair_anim(config: &FairAnimConfig) -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::gif(&config.filename, (1600, 400), 33)?.into_drawing_area();
+    let root = BitMapBackend::gif(&config.filename, (1600, 400), 16)?.into_drawing_area();
 
     // Vertical separation between flows
     let vsep = PKT_HEIGHT * 13.;

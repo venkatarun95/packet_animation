@@ -17,7 +17,8 @@ pub struct Transport<N: Element> {
 impl<N: Element> Transport<N> {
     pub fn new(delay: u64, next: Rc<RefCell<N>>) -> Self {
         Self {
-            delay,
+            // Quick and dirty hack to slow everything down
+            delay: delay * 4,
             next,
             pkts: Vec::new(),
         }
