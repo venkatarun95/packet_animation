@@ -6,6 +6,8 @@ fn cca_behavior(link_rate: f64) -> Vec<(f64, f64)> {
     let mut res = Vec::new();
     let ss_exit = 1. / link_rate;
     let mut slow_start = true;
+    // Index at which slow start ended
+    let mut ss_ended = 0;
     let mut prev_y = 0.1;
     for i in 0..1000 {
         let x = 10. * i as f64 / 1000.;
@@ -14,9 +16,12 @@ fn cca_behavior(link_rate: f64) -> Vec<(f64, f64)> {
             prev_y += 0.02 * prev_y;
             if prev_y > ss_exit {
                 slow_start = false;
+                ss_ended = i;
             }
         } else {
-            prev_y += if (i / 100) % 2 == 0 { 1. } else { -1. } * (1. / link_rate) / (10. * 100.);
+            let i = i - ss_ended;
+            // prev_y += if (i / 100) % 2 == 0 { 1. } else { -1. } * (1. / link_rate) / (10. * 100.);
+            prev_y += if (i / 100) % 2 == 0 { -1. } else { 1. } * (5.0) / (10. * 100.);
         }
     }
     res
