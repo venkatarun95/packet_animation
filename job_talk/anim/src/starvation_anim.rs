@@ -121,5 +121,31 @@ pub fn starvation_anim() -> Result<(), Box<dyn Error>> {
         Into::<ShapeStyle>::into(&BLACK).filled(),
     )])?;
 
+    // Plot two graphs with a region around the lines
+    let root = BitMapBackend::new("starvation-area.png", (1200, 800)).into_drawing_area();
+    root.fill(&WHITE)?;
+    let mut chart = ChartBuilder::on(&root).build_cartesian_2d(0.0..10.0, 0.0..10.0)?;
+    chart
+        .configure_mesh()
+        .disable_x_mesh()
+        .disable_y_mesh()
+        .y_desc("Time")
+        .x_desc("Packet delay")
+        .draw()?;
+
+    let mut poly = cca_behavior(0.5);
+    let mut translated_line = poly.iter().map(|(x, y)| (*x, y - 1.0)).collect::<Vec<_>>();
+    translated_line.reverse();
+    poly.append(&mut translated_line);
+
+    chart.draw_series(vec![Polygon::new(
+        poly,
+        ShapeStyle {
+            color: RGBAColor(64, 116, 155, 1.0),
+            filled: true,
+            stroke_width: 0,
+        },
+    )])?;
+
     Ok(())
 }
